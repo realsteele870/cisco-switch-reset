@@ -15,6 +15,10 @@ def openSerialConnection(baudrate, port):
     return ser
 def sendToConsole(ser: serial.Serial, command: str, wait_time: float =3):
     command_to_send = " "+command+"\r"
+    if (command=="y") or (command==""):
+        command_to_send = command+"\r"
+
+    
     data_str=""
     ser.write(command_to_send.encode('Utf-8'))
     sleep(wait_time)
@@ -43,9 +47,9 @@ def CheckConnection(ser: serial.Serial, check: str):
 
 def containsCheckConnection(ser: serial.Serial, check: str):
     connectionCheck = sendToConsole(ser,"")
-    if (connectionCheck.__contains__(check)) :
-        return False
-    return True
+    if (check in connectionCheck) :
+        return True
+    return False
 def breakConnection(ser):
     result=sendToConsole(ser,"")
 
@@ -72,11 +76,25 @@ def splitDirectory(ciscoDir):
 
         x=x+1
        
-    
+    print("array start: \n\n")
     for value in newArray:
         print(value)
 
     return newArray
+
+def deleteFiles(filesToDelete,ser):
+    
+    command = "del "
+    for file in filesToDelete:
+        command= command + "flash:"+file+" "
+    sendToConsole(ser,command)
+
+    for file in filesToDelete:
+        sendToConsole(ser,"y")
+
+        
+
+    
 
 def main():
     ConnectClass = Welcome()
@@ -89,29 +107,44 @@ def main():
         bootDone = CheckConnection(Connection,"")
     input("ready? break it out :D")
     sendToConsole(Connection,"flash_init")
-    sleep(30)
+    bootDone = containsCheckConnection(Connection,"switch:")
+    while bootDone ==False:
+        bootDone=containsCheckConnection(Connection,"switch:")
+    #sleep(30)
     sendToConsole(Connection,"")
 
     while (Connection.inWaiting()>0):
         data_str = Connection.read(Connection.inWaiting()).decode('ascii')
         print(data_str, end="")
     Connection.flush()
-
-
-
-    
-   # print(Connection.readline())
-   
-    
     sleep(5)
     ciscoDir =sendToConsole(Connection,"dir flash:")
     filesToRemove =splitDirectory(ciscoDir)
+    deleteFiles(filesToRemove,Connection)
+    sendToConsole(Connection,"boot")
+    bootDone = containsCheckConnection(Connection,"Would you like to enter the initial configuration dialog? [yes/no]:")
+    while bootDone ==False:
+        bootDone = containsCheckConnection(Connection,"Would you like to enter the initial configuration dialog? [yes/no]:")
 
+    sendToConsole(Connection,"no")
+    while (Connection.inWaiting()>0):
+        data_str = Connection.read(Connection.inWaiting()).decode('ascii')
+        print(data_str, end="")
+    versionText =sendToConsole(Connection,"show version | include Cisco")
+    while (Connection.inWaiting()>0):
+        data_str = Connection.read(Connection.inWaiting()).decode('ascii')
+        print(data_str, end="")
+    memoryText =sendToConsole(Connection,"show version | include memory")
+    sendToConsole(Connection,"en")
+    sendToConsole(Connection,"write erase")
+    sendToConsole(Connection,"")
+    f = open("switchOutput.txt","w")
+    f.write("version: \n"+versionText)
+    f.close()
 
-
-
-
-    
+    f= open("switchOutput.txt","a")
+    f.write("memory: \n"+memoryText)
+    f.close()
     
     Connection.close()
 
